@@ -1049,9 +1049,6 @@
     </div>
 
     <script>
-        // ============================================================
-        // ===== СИНХРОНИЗАЦИЯ ЧЕРЕЗ СВОЙ СЕРВЕР (Render) ============
-        // ============================================================
         const API_URL = window.location.origin;
         let firebaseReady = true;
 
@@ -3546,6 +3543,24 @@
             async function loadStockFromCloud() {
                 try {
                     const state = await apiGetState();
+                    if (state.employees && Array.isArray(state.employees) && state.employees.length > 0) {
+                        employees = state.employees;
+                        const maxId = employees.reduce((m, e) => Math.max(m, e.id || 0), 0);
+                        if (maxId >= nextEmployeeId) nextEmployeeId = maxId + 1;
+                        console.log('☁️ Сотрудники загружены: ' + employees.length);
+                    } else if (employees.length > 0) {
+                        await apiUpdateSection('employees', employees);
+                        console.log('☁️ Сотрудники отправлены (первый раз)');
+                    }
+                    if (state.shops && Array.isArray(state.shops) && state.shops.length > 0) {
+                        shops = state.shops;
+                        const maxId = shops.reduce((m, s) => Math.max(m, s.id || 0), 0);
+                        if (maxId >= nextShopId) nextShopId = maxId + 1;
+                        console.log('☁️ Магазины загружены: ' + shops.length);
+                    } else if (shops.length > 0) {
+                        await apiUpdateSection('shops', shops);
+                        console.log('☁️ Магазины отправлены (первый раз)');
+                    }
                     if (state.stock && Array.isArray(state.stock) && state.stock.length > 0) {
                         const localMap = {};
                         stock.forEach(s => { localMap[s.name + '|' + s.price] = s; });
@@ -3557,15 +3572,24 @@
                         });
                         const maxId = stock.reduce((m, s) => Math.max(m, s.id || 0), 0);
                         if (maxId >= nextId) nextId = maxId + 1;
-                        saveData();
-                        renderAll();
-                        console.log('☁️ Склад загружен: ' + stock.length + ' товаров');
+                        console.log('☁️ Склад загружен: ' + stock.length);
                     } else if (stock.length > 0) {
                         await apiUpdateSection('stock', stock);
                         console.log('☁️ Склад отправлен (первый раз)');
                     }
+                    if (state.shiftArchive && Array.isArray(state.shiftArchive)) {
+                        shiftArchive = state.shiftArchive;
+                        const maxId = shiftArchive.reduce((m, s) => Math.max(m, s.id || 0), 0);
+                        if (maxId >= nextShiftId) nextShiftId = maxId + 1;
+                        console.log('☁️ Архив смен загружен: ' + shiftArchive.length);
+                    }
+                    saveData();
+                    renderAll();
+                    renderShops();
+                    renderLoginEmployees();
+                    renderArchive();
                 } catch (err) {
-                    console.error('Ошибка загрузки склада:', err);
+                    console.error('Ошибка загрузки с сервера:', err);
                 }
             }
 
@@ -3623,8 +3647,34 @@
                             Object.keys(state.einvoices).forEach(id => { eInvoices[id] = state.einvoices[id]; });
                             saveEInvoices();
                         }
+                        if (state.employees && Array.isArray(state.employees)) {
+                            const localJson = JSON.stringify(employees.map(e => ({id: e.id, name: e.name, password: e.password, icon: e.icon})));
+                            const cloudJson = JSON.stringify(state.employees.map(e => ({id: e.id, name: e.name, password: e.password, icon: e.icon})));
+                            if (localJson !== cloudJson) {
+                                employees = state.employees;
+                                saveData();
+                                renderLoginEmployees();
+                                console.log('🔄 Сотрудники обновлены с сервера');
+                            }
+                        }
+                        if (state.shops && Array.isArray(state.shops)) {
+                            if (JSON.stringify(shops) !== JSON.stringify(state.shops)) {
+                                shops = state.shops;
+                                saveData();
+                                renderShops();
+                                console.log('🔄 Магазины обновлены с сервера');
+                            }
+                        }
+                        if (state.shiftArchive && Array.isArray(state.shiftArchive)) {
+                            if (JSON.stringify(shiftArchive) !== JSON.stringify(state.shiftArchive)) {
+                                shiftArchive = state.shiftArchive;
+                                saveData();
+                                renderArchive();
+                                console.log('🔄 Архив смен обновлён');
+                            }
+                        }
                     } catch(e) {}
-                }, 15000);
+                }, 10000);
             }
 
             function subscribeToStockChanges() {}
